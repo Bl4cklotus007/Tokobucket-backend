@@ -35,7 +35,7 @@ export const requireAdmin = async (req, res, next) => {
       [req.user.id]
     );
 
-    if (!user || user.role !== "admin") {
+    if (!user || (user.role !== "admin" && user.role !== "superadmin")) {
       return res.status(403).json({
         error: "Akses ditolak",
         message: "Anda tidak memiliki izin untuk mengakses resource ini",

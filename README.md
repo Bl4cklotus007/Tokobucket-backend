@@ -1,241 +1,341 @@
-# Bucket Wisuda & Dekorasi - Backend API
+# 🎓 Tokobucket Backend - MySQL Version
 
-Backend API untuk website Toko Bucket Wisuda & Dekorasi. Dibangun dengan Node.js, Express, dan SQLite.
+Backend API untuk Tokobucket (Bucket Wisuda & Dekorasi) menggunakan **MySQL** database.
 
-## 🚀 Quick Start
+## 🚀 Fitur
 
-### Prerequisites
+- ✅ **MySQL Database** - Database yang powerful dan scalable
+- ✅ **RESTful API** - Endpoint yang terstruktur dan mudah digunakan
+- ✅ **Authentication** - JWT-based authentication untuk admin
+- ✅ **File Upload** - Upload gambar produk dan galeri dengan Multer
+- ✅ **Product Management** - CRUD operations untuk produk dengan image upload
+- ✅ **Admin Panel** - Dashboard admin untuk manajemen produk
+- ✅ **Rate Limiting** - Proteksi dari spam dan abuse
+- ✅ **Security** - Helmet, CORS, dan validasi input
+- ✅ **Compression** - Optimasi performa dengan gzip
 
-- Node.js 18+
-- npm atau yarn
+## 📤 Product Management Features
 
-### Installation
+### 🖼️ Upload Gambar Produk
 
-1. **Install dependencies**
+- **Multer Integration** - File upload middleware
+- **Image Validation** - Hanya file gambar yang diperbolehkan
+- **Size Limit** - Maksimal 5MB per file
+- **Unique Filename** - Generate nama file unik dengan timestamp
+- **Error Handling** - Comprehensive error handling untuk upload
+
+### ➕ Tambah Produk Baru
 
 ```bash
-cd backend
+POST /api/products
+Authorization: Bearer <token>
+Content-Type: multipart/form-data
+
+Form Data:
+- image: [file] (optional)
+- name: "Bucket Wisuda Premium"
+- description: "Deskripsi produk"
+- price: 150000
+- category: "wisuda"
+- features: ["Bunga Segar", "Custom Design"]
+- is_featured: true
+```
+
+### ✏️ Update Produk
+
+```bash
+PUT /api/products/:id
+Authorization: Bearer <token>
+Content-Type: multipart/form-data
+
+Form Data:
+- image: [file] (optional)
+- name: "Nama Produk Updated"
+- price: 160000
+- features: ["Feature 1", "Feature 2"]
+```
+
+### 🗑️ Hapus Produk (Soft Delete)
+
+```bash
+DELETE /api/products/:id
+Authorization: Bearer <token>
+```
+
+### 🔄 Toggle Status
+
+```bash
+# Toggle Featured Status
+PUT /api/products/:id/toggle-featured
+
+# Toggle Active Status
+PUT /api/products/:id/toggle-active
+```
+
+### 📊 Admin Panel
+
+```bash
+# Get All Products (including inactive)
+GET /api/products/admin/all?limit=50&offset=0&category=wisuda&status=active
+```
+
+## 📋 Prerequisites
+
+Sebelum menjalankan project ini, pastikan Anda memiliki:
+
+- **Node.js** (versi 18 atau lebih baru)
+- **MySQL** (versi 8.0 atau lebih baru)
+- **npm** atau **yarn**
+
+## 🗄️ Database Setup
+
+### 1. Install MySQL
+
+- Download dan install MySQL dari [mysql.com](https://dev.mysql.com/downloads/)
+- Atau gunakan XAMPP/WAMP yang sudah include MySQL
+
+### 2. Buat Database
+
+```bash
+# Login ke MySQL
+mysql -u root -p
+
+# Buat database
+CREATE DATABASE balon_tegal;
+USE balon_tegal;
+
+# Atau import file SQL yang sudah disediakan
+mysql -u root -p < balon_tegal.sql
+```
+
+### 3. Konfigurasi Environment
+
+Buat file `.env` di root directory:
+
+```env
+# Database Configuration
+DB_HOST=localhost
+DB_USER=root
+DB_PASSWORD=your_mysql_password
+DB_NAME=balon_tegal
+DB_PORT=3306
+
+# Server Configuration
+PORT=5000
+NODE_ENV=development
+
+# JWT Configuration
+JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+JWT_EXPIRES_IN=24h
+
+# File Upload Configuration
+UPLOAD_PATH=./uploads
+MAX_FILE_SIZE=5242880
+```
+
+## 🛠️ Installation
+
+### 1. Clone Repository
+
+```bash
+git clone https://github.com/Bl4cklotus007/Tokobucket-backend.git
+cd Tokobucket-backend
+```
+
+### 2. Install Dependencies
+
+```bash
 npm install
 ```
 
-2. **Setup environment variables**
+### 3. Setup Database
 
 ```bash
-cp .env.example .env
-# Edit .env file sesuai konfigurasi Anda
-```
+# Import database schema dan sample data
+mysql -u root -p < balon_tegal.sql
 
-3. **Initialize database**
-
-```bash
+# Atau jalankan script inisialisasi
 npm run init-db
 ```
 
-4. **Start development server**
+### 4. Start Server
 
 ```bash
+# Development mode
 npm run dev
+
+# Production mode
+npm start
 ```
 
-Server akan berjalan di `http://localhost:5000`
-
-## 📁 Struktur Folder
-
-```
-backend/
-├── config/
-│   └── database.js          # Konfigurasi database SQLite
-├── routes/
-│   ├── products.js          # API endpoints untuk produk
-│   ├── orders.js            # API endpoints untuk pesanan
-│   ├── testimonials.js      # API endpoints untuk testimoni
-│   ├── contact.js           # API endpoints untuk kontak
-│   └── admin.js             # API endpoints untuk admin
-├── scripts/
-│   └── initDatabase.js      # Script inisialisasi database
-├── data/
-│   └── bucket_wisuda.db     # Database SQLite (auto-generated)
-├── uploads/                 # Folder untuk upload gambar
-├── server.js                # Main server file
-└── package.json
-```
-
-## 🔌 API Endpoints
+## 📡 API Endpoints
 
 ### Products
 
-- `GET /api/products` - Get all products
-- `GET /api/products/:id` - Get single product
+- `GET /api/products` - Get all active products
+- `GET /api/products/:id` - Get product by ID
 - `GET /api/products/featured/list` - Get featured products
-- `POST /api/products` - Create new product (admin)
+- `GET /api/products/categories/stats` - Get category statistics
+- `GET /api/products/admin/all` - Get all products (Admin only)
+- `POST /api/products` - Create new product (Admin only)
+- `PUT /api/products/:id` - Update product (Admin only)
+- `DELETE /api/products/:id` - Soft delete product (Admin only)
+- `PUT /api/products/:id/toggle-featured` - Toggle featured status (Admin only)
+- `PUT /api/products/:id/toggle-active` - Toggle active status (Admin only)
 
 ### Orders
 
+- `GET /api/orders` - Get all orders (Admin only)
+- `GET /api/orders/:id` - Get order by ID
 - `POST /api/orders` - Create new order
-- `GET /api/orders/:id` - Get order details
-- `POST /api/orders/quote` - Get price quote
-- `PUT /api/orders/:id/status` - Update order status (admin)
+- `PUT /api/orders/:id/status` - Update order status (Admin only)
 
 ### Testimonials
 
 - `GET /api/testimonials` - Get all approved testimonials
 - `GET /api/testimonials/featured` - Get featured testimonials
-- `POST /api/testimonials` - Submit new testimonial
+- `POST /api/testimonials` - Create new testimonial
+- `PUT /api/testimonials/:id` - Update testimonial (Admin only)
 
 ### Contact
 
-- `POST /api/contact` - Submit contact message
-- `POST /api/contact/whatsapp` - Generate WhatsApp link
+- `GET /api/contact` - Get all contact messages (Admin only)
+- `POST /api/contact` - Send contact message
 
-### Admin
+### Admin Authentication
 
-- `GET /api/admin/dashboard` - Get dashboard statistics
-- `GET /api/admin/orders/pending` - Get pending orders
-- `GET /api/admin/reports/sales` - Get sales report
+- `POST /api/auth/login` - Admin login
+- `POST /api/auth/register` - Admin registration (Superadmin only)
+- `GET /api/auth/me` - Get admin profile
 
-## 💾 Database Schema
+## 🔐 Admin Login
 
-### Products
+Setelah setup database, Anda bisa login dengan:
 
-```sql
-- id (INTEGER PRIMARY KEY)
-- name (TEXT NOT NULL)
-- description (TEXT)
-- price (INTEGER NOT NULL)
-- original_price (INTEGER)
-- category (TEXT NOT NULL) -- 'wisuda', 'balon', 'pernikahan'
-- image_url (TEXT)
-- features (TEXT) -- JSON string
-- rating (REAL DEFAULT 5.0)
-- reviews_count (INTEGER DEFAULT 0)
-- is_featured (BOOLEAN DEFAULT 0)
-- is_active (BOOLEAN DEFAULT 1)
-- created_at, updated_at
+```
+Username: admin
+Password: password
 ```
 
-### Orders
+## 📁 Project Structure
 
-```sql
-- id (INTEGER PRIMARY KEY)
-- customer_name, customer_phone, customer_email, customer_address
-- order_type (TEXT) -- 'standard' or 'custom'
-- product_id (INTEGER, FK to products)
-- custom_description (TEXT)
-- quantity (INTEGER DEFAULT 1)
-- total_price (INTEGER)
-- status (TEXT) -- 'pending', 'confirmed', 'processing', 'completed', 'cancelled'
-- notes (TEXT)
-- created_at, updated_at
+```
+Tokobucket-backend/
+├── config/
+│   └── database.js          # MySQL connection & queries
+├── middleware/
+│   ├── auth.js              # JWT authentication
+│   └── upload.js            # File upload handling (Multer)
+├── routes/
+│   ├── admin.js             # Admin routes
+│   ├── auth.js              # Authentication routes
+│   ├── contact.js           # Contact form routes
+│   ├── orders.js            # Order management routes
+│   ├── products.js          # Product management routes
+│   └── testimonials.js      # Testimonial routes
+├── scripts/
+│   └── initDatabase.js      # Database initialization
+├── uploads/                 # Uploaded files directory
+├── balon_tegal.sql          # Database schema
+├── PRODUCT_MANAGEMENT.md    # Product management documentation
+├── package.json
+├── server.js                # Main server file
+└── README.md
 ```
 
-### Testimonials
+## 🗄️ Database Schema
 
-```sql
-- id (INTEGER PRIMARY KEY)
-- customer_name, customer_role, customer_location
-- rating (INTEGER 1-5)
-- testimonial_text (TEXT NOT NULL)
-- image_url (TEXT)
-- is_approved, is_featured (BOOLEAN)
-- created_at
-```
+### Tables
 
-## 🔒 Security Features
+- **products** - Product catalog dengan image_url dan features JSON
+- **orders** - Customer orders
+- **testimonials** - Customer reviews
+- **contact_messages** - Contact form submissions
+- **admin_users** - Admin accounts
+- **galleries** - Image gallery
 
-- **Rate Limiting**: 100 requests per 15 menit per IP
-- **CORS**: Konfigurasi untuk frontend domain
-- **Helmet**: Security headers
-- **Input Validation**: Menggunakan express-validator
-- **SQL Injection Protection**: Parameterized queries
+### Product Categories
 
-## 📝 Sample Data
+- `wisuda` - Bucket wisuda dan hadiah
+- `balon` - Dekorasi balon
+- `pernikahan` - Dekorasi pernikahan
 
-Database akan diisi dengan sample data:
+### Product Features
 
-- 6 produk bucket wisuda dan dekorasi
-- 5 testimoni pelanggan
-- Berbagai kategori produk (wisuda, balon, pernikahan)
+- **image_url** - Path ke gambar produk
+- **features** - JSON array untuk fitur produk
+- **is_featured** - Status unggulan
+- **is_active** - Status aktif/nonaktif
+- **rating** - Rating produk
+- **reviews_count** - Jumlah review
 
-## 🔧 Development
+## 🚀 Testing Product Management
 
-### Scripts
-
-- `npm start` - Start production server
-- `npm run dev` - Start development server dengan nodemon
-- `npm run init-db` - Initialize database dengan sample data
-
-### Environment Variables
-
-```env
-PORT=5000
-NODE_ENV=development
-FRONTEND_URL=http://localhost:5173
-WHATSAPP_NUMBER=6281234567890
-```
-
-## 🚀 Production Deployment
-
-1. **Set environment**
+### Test Upload & Add Product
 
 ```bash
-NODE_ENV=production
-```
-
-2. **Setup production database**
-
-```bash
-npm run init-db
-```
-
-3. **Start server**
-
-```bash
-npm start
-```
-
-## 🐛 Troubleshooting
-
-### Database Issues
-
-```bash
-# Hapus database dan buat ulang
-rm data/bucket_wisuda.db
-npm run init-db
-```
-
-### Permission Issues
-
-```bash
-# Pastikan folder data dan uploads writable
-chmod 755 data/
-chmod 755 uploads/
-```
-
-## 📞 API Testing
-
-### Health Check
-
-```bash
-curl http://localhost:5000/api/health
-```
-
-### Get Products
-
-```bash
-curl http://localhost:5000/api/products
-```
-
-### Create Order
-
-```bash
-curl -X POST http://localhost:5000/api/orders \
+# Login as admin
+curl -X POST http://localhost:5000/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{
-    "customer_name": "John Doe",
-    "customer_phone": "081234567890",
-    "order_type": "custom",
-    "custom_description": "Bucket wisuda warna biru dan putih"
-  }'
+  -d '{"username":"admin","password":"password"}'
+
+# Add new product with image
+curl -X POST http://localhost:5000/api/products \
+  -H "Authorization: Bearer <token>" \
+  -F "image=@product-image.jpg" \
+  -F "name=Bucket Test" \
+  -F "price=150000" \
+  -F "category=wisuda"
 ```
 
-Untuk pertanyaan atau bantuan lebih lanjut, silakan hubungi tim development.
+### Test Update Product
+
+```bash
+curl -X PUT http://localhost:5000/api/products/1 \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Updated Name","price":160000}'
+```
+
+### Test Toggle Featured
+
+```bash
+curl -X PUT http://localhost:5000/api/products/1/toggle-featured \
+  -H "Authorization: Bearer <token>"
+```
+
+## 🚀 Deployment
+
+### Production Setup
+
+1. Set `NODE_ENV=production` di `.env`
+2. Gunakan strong JWT secret
+3. Setup MySQL dengan user dedicated
+4. Configure reverse proxy (nginx/apache)
+5. Setup SSL certificate
+6. Configure file upload directory permissions
+
+## 📚 Documentation
+
+- [Product Management Guide](./PRODUCT_MANAGEMENT.md) - Detailed guide for product management features
+- [API Documentation](./API_DOCS.md) - Complete API reference
+- [Database Schema](./DATABASE_SCHEMA.md) - Database structure documentation
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🆘 Support
+
+Jika ada pertanyaan atau masalah, silakan buat issue di repository ini atau hubungi:
+
+- Email: admin@balon-tegal.com
+- Website: [balon-tegal.com](https://balon-tegal.com)

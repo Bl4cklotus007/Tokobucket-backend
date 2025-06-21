@@ -1,179 +1,201 @@
-import sqlite3 from "sqlite3";
-import path from "path";
-import { fileURLToPath } from "url";
+import mysql from "mysql2/promise";
+import dotenv from "dotenv";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+dotenv.config();
 
-// Create database connection
-const dbPath = path.join(__dirname, "../data/bucket_wisuda.db");
-const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) {
-    console.error("❌ Error connecting to database:", err.message);
-  } else {
-    console.log("✅ Connected to SQLite database");
+// MySQL connection configuration
+const dbConfig = {
+  host: process.env.DB_HOST || "localhost",
+  user: process.env.DB_USER || "root",
+  password: process.env.DB_PASSWORD || "",
+  database: process.env.DB_NAME || "balon_tegal",
+  port: process.env.DB_PORT || 3306,
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
+};
+
+// Create connection pool
+const pool = mysql.createPool(dbConfig);
+
+// Test database connection
+export const testConnection = async () => {
+  try {
+    const connection = await pool.getConnection();
+    console.log("✅ Connected to MySQL database");
+    connection.release();
+    return true;
+  } catch (error) {
+    console.error("❌ Error connecting to MySQL database:", error.message);
+    return false;
   }
-});
-
-// Enable foreign keys
-db.run("PRAGMA foreign_keys = ON;");
+};
 
 // Initialize database tables
-export const initializeDatabase = () => {
-  return new Promise((resolve, reject) => {
+export const initializeDatabase = async () => {
+  try {
+    const connection = await pool.getConnection();
+    
     // Products table
-    db.run(
-      `
+    await connection.execute(`
       CREATE TABLE IF NOT EXISTS products (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
         description TEXT,
-        price INTEGER NOT NULL,
-        original_price INTEGER,
-        category TEXT NOT NULL,
-        image_url TEXT,
-        features TEXT, -- JSON string
-        rating REAL DEFAULT 5.0,
-        reviews_count INTEGER DEFAULT 0,
-        is_featured BOOLEAN DEFAULT 0,
-        is_active BOOLEAN DEFAULT 1,
+        price DECIMAL(10,2) NOT NULL,
+        original_price DECIMAL(10,2),
+        category ENUM('bucket', 'balon', 'dekor') NOT NULL,
+        image_url VARCHAR(255),
+        features JSON,
+        rating DECIMAL(3,2) DEFAULT 5.00,
+        reviews_count INT DEFAULT 0,
+        is_featured BOOLEAN DEFAULT FALSE,
+        is_active BOOLEAN DEFAULT TRUE,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
-    `,
-      (err) => {
-        if (err) reject(err);
-      },
-    );
+    `);
 
     // Orders table
-    db.run(
-      `
+    await connection.execute(`
       CREATE TABLE IF NOT EXISTS orders (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        customer_name TEXT NOT NULL,
-        customer_phone TEXT NOT NULL,
-        customer_email TEXT,
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        customer_name VARCHAR(100) NOT NULL,
+        customer_phone VARCHAR(20) NOT NULL,
+        customer_email VARCHAR(100),
         customer_address TEXT,
-        order_type TEXT NOT NULL, -- 'standard' or 'custom'
-        product_id INTEGER,
+        order_type ENUM('standard', 'custom') NOT NULL,
+        product_id INT,
         custom_description TEXT,
-        quantity INTEGER DEFAULT 1,
-        total_price INTEGER,
-        status TEXT DEFAULT 'pending', -- pending, confirmed, processing, completed, cancelled
+        quantity INT DEFAULT 1,
+        total_price DECIMAL(10,2),
+        status ENUM('pending', 'confirmed', 'processing', 'completed', 'cancelled') DEFAULT 'pending',
         notes TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (product_id) REFERENCES products (id)
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL
       )
-    `,
-      (err) => {
-        if (err) reject(err);
-      },
-    );
+    `);
 
     // Testimonials table
-    db.run(
-      `
+    await connection.execute(`
       CREATE TABLE IF NOT EXISTS testimonials (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        customer_name TEXT NOT NULL,
-        customer_role TEXT,
-        customer_location TEXT,
-        rating INTEGER NOT NULL,
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        customer_name VARCHAR(100) NOT NULL,
+        customer_role VARCHAR(100),
+        customer_location VARCHAR(100),
+        rating INT NOT NULL CHECK (rating BETWEEN 1 AND 5),
         testimonial_text TEXT NOT NULL,
-        image_url TEXT,
-        is_approved BOOLEAN DEFAULT 0,
-        is_featured BOOLEAN DEFAULT 0,
+        image_url VARCHAR(255),
+        is_approved BOOLEAN DEFAULT FALSE,
+        is_featured BOOLEAN DEFAULT FALSE,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
-    `,
-      (err) => {
-        if (err) reject(err);
-      },
-    );
+    `);
 
     // Contact messages table
-    db.run(
-      `
+    await connection.execute(`
       CREATE TABLE IF NOT EXISTS contact_messages (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        email TEXT,
-        phone TEXT,
-        subject TEXT,
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        email VARCHAR(100),
+        phone VARCHAR(20),
+        subject VARCHAR(200),
         message TEXT NOT NULL,
-        is_read BOOLEAN DEFAULT 0,
+        is_read BOOLEAN DEFAULT FALSE,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
-    `,
-      (err) => {
-        if (err) reject(err);
-      },
-    );
+    `);
 
     // Admin users table
-    db.run(
-      `
+    await connection.execute(`
       CREATE TABLE IF NOT EXISTS admin_users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE NOT NULL,
-        email TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
-        role TEXT DEFAULT 'admin',
-        is_active BOOLEAN DEFAULT 1,
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        username VARCHAR(50) UNIQUE NOT NULL,
+        email VARCHAR(100) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        role ENUM('admin', 'superadmin') DEFAULT 'admin',
+        is_active BOOLEAN DEFAULT TRUE,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
-    `,
-      (err) => {
-        if (err) {
-          reject(err);
-        } else {
-          console.log("✅ Database tables initialized");
-          resolve();
-        }
-      },
-    );
-  });
+    `);
+
+    // Galeri table
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS galleries (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(100),
+        image_url VARCHAR(255),
+        tag VARCHAR(50),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    connection.release();
+    console.log("✅ Database tables initialized");
+    return true;
+  } catch (error) {
+    console.error("❌ Error initializing database:", error.message);
+    throw error;
+  }
 };
 
 // Helper function to run queries with promises
-export const runQuery = (query, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.run(query, params, function (err) {
-      if (err) {
-        reject(err);
-      } else {
-        resolve({ id: this.lastID, changes: this.changes });
-      }
-    });
-  });
+export const runQuery = async (query, params = []) => {
+  try {
+    const [result] = await pool.execute(query, params);
+    return {
+      id: result.insertId,
+      changes: result.affectedRows,
+      result
+    };
+  } catch (error) {
+    throw error;
+  }
 };
 
 // Helper function to get single row
-export const getRow = (query, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.get(query, params, (err, row) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(row);
-      }
-    });
-  });
+export const getRow = async (query, params = []) => {
+  try {
+    const [rows] = await pool.execute(query, params);
+    return rows[0] || null;
+  } catch (error) {
+    throw error;
+  }
 };
 
 // Helper function to get all rows
-export const getAllRows = (query, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.all(query, params, (err, rows) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(rows);
-      }
-    });
-  });
+export const getAllRows = async (query, params = []) => {
+  try {
+    const [rows] = await pool.execute(query, params);
+    return rows;
+  } catch (error) {
+    throw error;
+  }
 };
 
-export default db;
+// Helper function to get multiple rows with pagination
+export const getPaginatedRows = async (query, params = [], page = 1, limit = 10) => {
+  try {
+    const offset = (page - 1) * limit;
+    const paginatedQuery = `${query} LIMIT ? OFFSET ?`;
+    const paginatedParams = [...params, limit, offset];
+    
+    const [rows] = await pool.execute(paginatedQuery, paginatedParams);
+    return rows;
+  } catch (error) {
+    throw error;
+  }
+};
+
+// Helper function to count rows
+export const countRows = async (query, params = []) => {
+  try {
+    const [rows] = await pool.execute(query, params);
+    return rows[0].count || 0;
+  } catch (error) {
+    throw error;
+  }
+};
+
+export default pool;
