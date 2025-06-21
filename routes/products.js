@@ -242,7 +242,7 @@ router.put(
   [
     body("name").optional().notEmpty(),
     body("price").optional().isInt({ min: 1 }),
-    body("category").optional().isIn(["bucket", "balon", "pernikahan"]),
+    body("category").optional().isIn(["bucket", "balon", "pernikahan", ""]),
     body("features").optional().isArray(),
   ],
   validateRequest,
@@ -265,6 +265,11 @@ router.put(
       // Handle image upload
       if (req.file) {
         updates.image_url = `/uploads/${req.file.filename}`;
+      }
+
+      // Filter out empty category values
+      if (updates.category === "") {
+        delete updates.category;
       }
 
       // Build update query dynamically
