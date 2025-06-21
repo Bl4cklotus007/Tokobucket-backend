@@ -3,6 +3,12 @@ import { body, query, validationResult } from "express-validator";
 import { getAllRows, getRow, runQuery } from "../config/database.js";
 import { verifyToken, requireAdmin } from "../middleware/auth.js";
 import { uploadSingle } from "../middleware/upload.js";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const router = express.Router();
 
@@ -22,7 +28,7 @@ const validateRequest = (req, res, next) => {
 router.get(
   "/",
   [
-    query("category").optional().isIn(["wisuda", "balon", "pernikahan"]),
+    query("category").optional().isIn(["bucket", "balon", "pernikahan"]),
     query("featured").optional().isBoolean(),
     query("limit").optional().isInt({ min: 1, max: 100 }),
     query("offset").optional().isInt({ min: 0 }),
@@ -173,7 +179,7 @@ router.post(
       .isInt({ min: 1 })
       .withMessage("Harga harus berupa angka positif"),
     body("category")
-      .isIn(["wisuda", "balon", "pernikahan"])
+      .isIn(["bucket", "balon", "pernikahan"])
       .withMessage("Kategori tidak valid"),
     body("description").optional().isString(),
     body("features").optional().isArray(),
@@ -236,7 +242,7 @@ router.put(
   [
     body("name").optional().notEmpty(),
     body("price").optional().isInt({ min: 1 }),
-    body("category").optional().isIn(["wisuda", "balon", "pernikahan"]),
+    body("category").optional().isIn(["bucket", "balon", "pernikahan"]),
     body("features").optional().isArray(),
   ],
   validateRequest,
@@ -320,15 +326,39 @@ router.delete("/:id", verifyToken, requireAdmin, async (req, res) => {
       });
     }
 
-    // Soft delete - set is_active to 0
-    await runQuery(
-      "UPDATE products SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+    // Check if there are any orders referencing this product
+    const relatedOrders = await getAllRows(
+      "SELECT id FROM orders WHERE product_id = ?",
       [id],
     );
 
+    if (relatedOrders.length > 0) {
+      return res.status(400).json({
+        error: "Tidak dapat menghapus produk",
+        message: `Produk ini masih memiliki ${relatedOrders.length} pesanan terkait. Hapus pesanan terlebih dahulu atau ubah referensi produk.`,
+        related_orders_count: relatedOrders.length,
+      });
+    }
+
+    // Hard delete - remove from database and delete associated image file
+    await runQuery(
+      "DELETE FROM products WHERE id = ?",
+      [id],
+    );
+
+    // Delete image file from uploads directory
+    if (existingProduct.image_url) {
+      const imagePath = path.join(__dirname, "..", existingProduct.image_url.replace(/^\//, ""));
+      fs.unlink(imagePath, (err) => {
+        if (err) {
+          console.error("Error deleting image:", err);
+        }
+      });
+    }
+
     res.json({
       success: true,
-      message: "Produk berhasil dihapus",
+      message: "Produk berhasil dihapus secara permanen",
     });
   } catch (error) {
     console.error("Error deleting product:", error);
@@ -339,7 +369,7 @@ router.delete("/:id", verifyToken, requireAdmin, async (req, res) => {
   }
 });
 
-// GET /api/products/admin/all - Get all products for admin (including inactive)
+// GET /api/products/admin/all - Get all products for admin
 router.get("/admin/all", verifyToken, requireAdmin, async (req, res) => {
   try {
     const { limit = 50, offset = 0, category, status } = req.query;
@@ -355,9 +385,8 @@ router.get("/admin/all", verifyToken, requireAdmin, async (req, res) => {
     }
     if (status === "active") {
       conditions.push("is_active = 1");
-    } else if (status === "inactive") {
-      conditions.push("is_active = 0");
     }
+    // Note: Removed inactive filter since we now use hard delete
 
     if (conditions.length > 0) {
       query += " WHERE " + conditions.join(" AND ");
