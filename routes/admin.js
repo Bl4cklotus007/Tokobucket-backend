@@ -44,7 +44,7 @@ router.get("/dashboard", async (req, res) => {
       SELECT 
         COUNT(*) as total_testimonials,
         COUNT(CASE WHEN is_approved = 1 THEN 1 END) as approved_testimonials,
-        AVG(rating) as average_rating
+        COALESCE(CAST(AVG(rating) AS DECIMAL(3,2)), 0) as average_rating
       FROM testimonials
     `);
 
@@ -75,13 +75,13 @@ router.get("/dashboard", async (req, res) => {
     // Get monthly revenue trend (last 6 months)
     const monthlyRevenue = await getAllRows(`
       SELECT 
-        strftime('%Y-%m', created_at) as month,
+        DATE_FORMAT(created_at, '%Y-%m') as month,
         COUNT(*) as order_count,
         SUM(total_price) as revenue
       FROM orders 
       WHERE status = 'completed' 
-        AND created_at >= date('now', '-6 months')
-      GROUP BY strftime('%Y-%m', created_at)
+        AND created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+      GROUP BY DATE_FORMAT(created_at, '%Y-%m')
       ORDER BY month DESC
     `);
 
@@ -226,25 +226,25 @@ router.get("/reports/sales", async (req, res) => {
     let dateFormat, groupBy;
     if (period === "daily") {
       dateFormat = "%Y-%m-%d";
-      groupBy = "date(created_at)";
+      groupBy = "DATE(created_at)";
     } else if (period === "weekly") {
-      dateFormat = "%Y-W%W";
-      groupBy = "strftime('%Y-W%W', created_at)";
+      dateFormat = "%Y-W%u";
+      groupBy = "DATE_FORMAT(created_at, '%Y-W%u')";
     } else {
       dateFormat = "%Y-%m";
-      groupBy = "strftime('%Y-%m', created_at)";
+      groupBy = "DATE_FORMAT(created_at, '%Y-%m')";
     }
 
     const salesData = await getAllRows(`
       SELECT 
-        strftime('${dateFormat}', created_at) as period,
+        DATE_FORMAT(created_at, '${dateFormat}') as period,
         COUNT(*) as order_count,
         SUM(total_price) as revenue,
         COUNT(CASE WHEN order_type = 'standard' THEN 1 END) as standard_orders,
         COUNT(CASE WHEN order_type = 'custom' THEN 1 END) as custom_orders
       FROM orders 
       WHERE status = 'completed' 
-        AND strftime('%Y', created_at) = '${year}'
+        AND YEAR(created_at) = ${year}
       GROUP BY ${groupBy}
       ORDER BY period
     `);
@@ -259,7 +259,7 @@ router.get("/reports/sales", async (req, res) => {
       FROM orders o
       JOIN products p ON o.product_id = p.id
       WHERE o.status = 'completed'
-        AND strftime('%Y', o.created_at) = '${year}'
+        AND YEAR(o.created_at) = ${year}
       GROUP BY p.id
       ORDER BY order_count DESC
       LIMIT 10
