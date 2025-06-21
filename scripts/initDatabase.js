@@ -71,7 +71,7 @@ const sampleProducts = [
       "Paket dekorasi pernikahan dengan konsep minimalis dan elegant",
     price: 1500000,
     original_price: 1800000,
-    category: "dekor",
+    category: "pernikahan",
     image_url: "/uploads/wedding-minimal.jpg",
     features: ["Setup Lengkap", "Konsep Minimalis", "Tim Decorator"],
     is_featured: false,

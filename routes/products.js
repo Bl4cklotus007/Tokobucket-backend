@@ -10,15 +10,52 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Helper function to delete image file
+const deleteImageFile = async (imageUrl) => {
+  if (!imageUrl) return;
+  
+  try {
+    // Handle different image URL formats
+    if (imageUrl.startsWith('http')) {
+      // Skip external URLs
+      console.log("Skipping external image URL:", imageUrl);
+      return;
+    }
+    
+    // Handle local file paths
+    const cleanImageUrl = imageUrl.replace(/^\//, "");
+    const imagePath = path.join(__dirname, "..", cleanImageUrl);
+    
+    // Check if file exists before deleting
+    if (fs.existsSync(imagePath)) {
+      await fs.promises.unlink(imagePath);
+      console.log("✅ Image file deleted successfully:", imagePath);
+      return true;
+    } else {
+      console.log("⚠️  Image file not found:", imagePath);
+      return false;
+    }
+  } catch (fileError) {
+    console.error("❌ Error deleting image file:", fileError.message);
+    return false;
+  }
+};
+
 const router = express.Router();
 
 // Validation middleware
 const validateRequest = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
+    console.log("Validation errors:", errors.array());
     return res.status(400).json({
       error: "Data tidak valid",
-      details: errors.array(),
+      message: "Terdapat kesalahan validasi pada data yang dikirim",
+      details: errors.array().map(err => ({
+        field: err.path,
+        message: err.msg,
+        value: err.value
+      })),
     });
   }
   next();
@@ -183,6 +220,22 @@ router.post(
       .withMessage("Kategori tidak valid"),
     body("description").optional().isString(),
     body("features").optional().isArray(),
+    body("is_featured").optional().custom((value) => {
+      console.log("Validating is_featured:", value, "Type:", typeof value);
+      if (value === undefined || value === '') {
+        console.log("is_featured is undefined or empty, returning true");
+        return true;
+      }
+      // Handle both string and boolean values from FormData
+      if (typeof value === 'string') {
+        const isValid = value === 'true' || value === 'false';
+        console.log("is_featured is string, validation result:", isValid);
+        return isValid;
+      }
+      const isValid = value === true || value === false;
+      console.log("is_featured is boolean, validation result:", isValid);
+      return isValid;
+    }).withMessage("Status unggulan harus berupa boolean"),
   ],
   validateRequest,
   async (req, res) => {
@@ -200,6 +253,9 @@ router.post(
       // Handle image upload
       const image_url = req.file ? `/uploads/${req.file.filename}` : null;
 
+      // Handle boolean values from FormData
+      const isFeaturedBoolean = is_featured === 'true' || is_featured === true;
+
       const result = await runQuery(
         `
       INSERT INTO products 
@@ -208,13 +264,13 @@ router.post(
     `,
         [
           name,
-          description,
+          description || null,
           price,
-          original_price,
+          original_price || null,
           category,
           image_url,
           JSON.stringify(features),
-          is_featured ? 1 : 0,
+          isFeaturedBoolean ? 1 : 0,
         ],
       );
 
@@ -240,10 +296,35 @@ router.put(
   requireAdmin,
   uploadSingle,
   [
-    body("name").optional().notEmpty(),
-    body("price").optional().isInt({ min: 1 }),
-    body("category").optional().isIn(["bucket", "balon", "pernikahan", ""]),
-    body("features").optional().isArray(),
+    body("name").optional().notEmpty().withMessage("Nama produk tidak boleh kosong"),
+    body("price").optional().custom((value) => {
+      if (value === undefined || value === '') return true;
+      const num = parseInt(value);
+      return !isNaN(num) && num > 0;
+    }).withMessage("Harga harus berupa angka positif"),
+    body("category").optional().isIn(["bucket", "balon", "pernikahan"]).withMessage("Kategori tidak valid. Pilih: bucket, balon, atau pernikahan"),
+    body("original_price").optional().custom((value) => {
+      if (value === undefined || value === '') return true;
+      const num = parseInt(value);
+      return !isNaN(num) && num >= 0;
+    }).withMessage("Harga asli harus berupa angka positif"),
+    body("is_featured").optional().custom((value) => {
+      console.log("Validating is_featured:", value, "Type:", typeof value);
+      if (value === undefined || value === '') {
+        console.log("is_featured is undefined or empty, returning true");
+        return true;
+      }
+      // Handle both string and boolean values from FormData
+      if (typeof value === 'string') {
+        const isValid = value === 'true' || value === 'false';
+        console.log("is_featured is string, validation result:", isValid);
+        return isValid;
+      }
+      const isValid = value === true || value === false;
+      console.log("is_featured is boolean, validation result:", isValid);
+      return isValid;
+    }).withMessage("Status unggulan harus berupa boolean"),
+    body("features").optional().isArray().withMessage("Fitur harus berupa array"),
   ],
   validateRequest,
   async (req, res) => {
@@ -251,25 +332,45 @@ router.put(
       const { id } = req.params;
       const updates = req.body;
 
+      console.log("Updating product ID:", id);
+      console.log("Update data:", updates);
+      console.log("Request body keys:", Object.keys(req.body));
+      console.log("is_featured value:", updates.is_featured);
+      console.log("is_featured type:", typeof updates.is_featured);
+
       // Check if product exists
       const existingProduct = await getRow(
-        "SELECT id, image_url FROM products WHERE id = ?",
+        "SELECT id, image_url, category FROM products WHERE id = ?",
         [id],
       );
       if (!existingProduct) {
         return res.status(404).json({
           error: "Produk tidak ditemukan",
+          message: `Produk dengan ID ${id} tidak ditemukan dalam database`,
         });
       }
 
       // Handle image upload
       if (req.file) {
+        // Delete old image if it exists and is different from the new one
+        if (existingProduct.image_url && existingProduct.image_url !== `/uploads/${req.file.filename}`) {
+          await deleteImageFile(existingProduct.image_url);
+        }
+        
         updates.image_url = `/uploads/${req.file.filename}`;
       }
 
-      // Filter out empty category values
-      if (updates.category === "") {
-        delete updates.category;
+      // Handle boolean values from FormData
+      if (updates.is_featured !== undefined) {
+        updates.is_featured = updates.is_featured === 'true' || updates.is_featured === true;
+      }
+
+      // Handle numeric values from FormData
+      if (updates.price !== undefined) {
+        updates.price = parseInt(updates.price);
+      }
+      if (updates.original_price !== undefined && updates.original_price !== '') {
+        updates.original_price = parseInt(updates.original_price);
       }
 
       // Build update query dynamically
@@ -277,39 +378,51 @@ router.put(
       const updateValues = [];
 
       Object.keys(updates).forEach((key) => {
-        if (key === "features") {
-          updateFields.push(`${key} = ?`);
-          updateValues.push(JSON.stringify(updates[key]));
-        } else {
-          updateFields.push(`${key} = ?`);
-          updateValues.push(updates[key]);
+        if (updates[key] !== undefined && updates[key] !== null && updates[key] !== '') {
+          if (key === "features") {
+            updateFields.push(`${key} = ?`);
+            updateValues.push(JSON.stringify(updates[key]));
+          } else if (key === "is_featured") {
+            updateFields.push(`${key} = ?`);
+            updateValues.push(updates[key] ? 1 : 0);
+          } else {
+            updateFields.push(`${key} = ?`);
+            updateValues.push(updates[key]);
+          }
         }
       });
 
       if (updateFields.length === 0) {
         return res.status(400).json({
           error: "Tidak ada data yang diupdate",
+          message: "Tidak ada field yang valid untuk diupdate",
         });
       }
 
       updateFields.push("updated_at = CURRENT_TIMESTAMP");
       updateValues.push(id);
 
-      await runQuery(
-        `UPDATE products SET ${updateFields.join(", ")} WHERE id = ?`,
-        updateValues,
-      );
+      const updateQuery = `UPDATE products SET ${updateFields.join(", ")} WHERE id = ?`;
+      console.log("Update query:", updateQuery);
+      console.log("Update values:", updateValues);
+
+      await runQuery(updateQuery, updateValues);
 
       res.json({
         success: true,
         message: "Produk berhasil diupdate",
-        data: { image_url: updates.image_url },
+        data: { 
+          id: parseInt(id),
+          updated_fields: Object.keys(updates),
+          image_url: updates.image_url 
+        },
       });
     } catch (error) {
       console.error("Error updating product:", error);
       res.status(500).json({
         error: "Gagal mengupdate produk",
         message: error.message,
+        details: error.sqlMessage || error.message,
       });
     }
   },
@@ -345,25 +458,19 @@ router.delete("/:id", verifyToken, requireAdmin, async (req, res) => {
       });
     }
 
-    // Hard delete - remove from database and delete associated image file
+    // Delete image file from uploads directory first
+    await deleteImageFile(existingProduct.image_url);
+
+    // Hard delete - remove from database
     await runQuery(
       "DELETE FROM products WHERE id = ?",
       [id],
     );
 
-    // Delete image file from uploads directory
-    if (existingProduct.image_url) {
-      const imagePath = path.join(__dirname, "..", existingProduct.image_url.replace(/^\//, ""));
-      fs.unlink(imagePath, (err) => {
-        if (err) {
-          console.error("Error deleting image:", err);
-        }
-      });
-    }
-
     res.json({
       success: true,
       message: "Produk berhasil dihapus secara permanen",
+      deleted_image: existingProduct.image_url || null,
     });
   } catch (error) {
     console.error("Error deleting product:", error);
@@ -495,6 +602,60 @@ router.put("/:id/toggle-active", verifyToken, requireAdmin, async (req, res) => 
     console.error("Error toggling active status:", error);
     res.status(500).json({
       error: "Gagal mengubah status aktif",
+      message: error.message,
+    });
+  }
+});
+
+// POST /api/products/cleanup-images - Clean up orphaned images (admin only)
+router.post("/cleanup-images", verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const uploadsDir = path.join(__dirname, "..", "uploads");
+    
+    // Get all image files in uploads directory
+    const files = await fs.promises.readdir(uploadsDir);
+    const imageFiles = files.filter(file => 
+      /\.(jpg|jpeg|png|gif|webp)$/i.test(file)
+    );
+    
+    // Get all image URLs from database
+    const products = await getAllRows("SELECT image_url FROM products WHERE image_url IS NOT NULL");
+    const dbImageUrls = products.map(p => p.image_url.replace(/^\//, ""));
+    
+    // Find orphaned images (files that exist but not in database)
+    const orphanedImages = imageFiles.filter(file => !dbImageUrls.includes(file));
+    
+    let deletedCount = 0;
+    let errorCount = 0;
+    
+    // Delete orphaned images
+    for (const imageFile of orphanedImages) {
+      try {
+        const imagePath = path.join(uploadsDir, imageFile);
+        await fs.promises.unlink(imagePath);
+        console.log("✅ Orphaned image deleted:", imageFile);
+        deletedCount++;
+      } catch (error) {
+        console.error("❌ Error deleting orphaned image:", imageFile, error.message);
+        errorCount++;
+      }
+    }
+    
+    res.json({
+      success: true,
+      message: `Cleanup completed. ${deletedCount} orphaned images deleted, ${errorCount} errors.`,
+      data: {
+        total_files: imageFiles.length,
+        orphaned_files: orphanedImages.length,
+        deleted_count: deletedCount,
+        error_count: errorCount,
+        orphaned_files_list: orphanedImages
+      }
+    });
+  } catch (error) {
+    console.error("Error cleaning up images:", error);
+    res.status(500).json({
+      error: "Gagal membersihkan gambar",
       message: error.message,
     });
   }

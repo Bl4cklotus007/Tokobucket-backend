@@ -13,6 +13,8 @@ Backend API untuk Tokobucket (Bucket Wisuda & Dekorasi) menggunakan **MySQL** da
 - ✅ **Rate Limiting** - Proteksi dari spam dan abuse
 - ✅ **Security** - Helmet, CORS, dan validasi input
 - ✅ **Compression** - Optimasi performa dengan gzip
+- ✅ **Penghapusan Gambar Otomatis** - Gambar produk otomatis dihapus saat produk dihapus atau diupdate
+- ✅ **Cleanup Gambar Orphaned** - Membersihkan gambar yang tidak terpakai
 
 ## 📤 Product Management Features
 
@@ -182,6 +184,7 @@ npm start
 - `DELETE /api/products/:id` - Soft delete product (Admin only)
 - `PUT /api/products/:id/toggle-featured` - Toggle featured status (Admin only)
 - `PUT /api/products/:id/toggle-active` - Toggle active status (Admin only)
+- `POST /api/products/cleanup-images` - Clean up orphaned images (Admin only)
 
 ### Orders
 
@@ -196,6 +199,7 @@ npm start
 - `GET /api/testimonials/featured` - Get featured testimonials
 - `POST /api/testimonials` - Create new testimonial
 - `PUT /api/testimonials/:id` - Update testimonial (Admin only)
+- `DELETE /api/testimonials/:id` - Delete testimonial (Admin only)
 
 ### Contact
 
@@ -339,3 +343,52 @@ Jika ada pertanyaan atau masalah, silakan buat issue di repository ini atau hubu
 
 - Email: admin@balon-tegal.com
 - Website: [balon-tegal.com](https://balon-tegal.com)
+
+## 📄 Penghapusan Gambar Otomatis
+
+Sistem ini memiliki fitur penghapusan gambar otomatis yang canggih:
+
+### 1. Saat Produk Dihapus
+
+- Gambar produk otomatis dihapus dari folder `uploads/`
+- Mendukung berbagai format gambar (jpg, jpeg, png, gif, webp)
+- Error handling yang robust - produk tetap dihapus meski gambar gagal dihapus
+- Logging detail untuk tracking
+
+### 2. Saat Produk Diupdate
+
+- Gambar lama otomatis dihapus saat upload gambar baru
+- Mencegah akumulasi file gambar yang tidak terpakai
+- Validasi file existence sebelum penghapusan
+
+### 3. Cleanup Gambar Orphaned
+
+- Endpoint `/api/products/cleanup-images` untuk membersihkan gambar yang tidak terpakai
+- Mencari file gambar yang ada di folder tapi tidak direferensikan di database
+- Menghapus file orphaned secara aman
+- Laporan detail hasil cleanup
+
+### 4. Helper Function
+
+- `deleteImageFile()` - fungsi helper untuk penghapusan gambar yang konsisten
+- Mendukung URL eksternal dan lokal
+- Error handling yang komprehensif
+- Logging untuk debugging
+
+## 📄 Kategori Produk
+
+Sistem menggunakan 3 kategori utama yang konsisten:
+
+1. **bucket** - Bucket Wisuda
+2. **balon** - Dekorasi Balon
+3. **pernikahan** - Dekorasi Pernikahan
+
+## 📄 Monitoring
+
+Sistem menyediakan logging detail untuk:
+
+- Penghapusan gambar (berhasil/gagal)
+- Upload gambar
+- Operasi CRUD produk
+- Error handling
+- Cleanup operations

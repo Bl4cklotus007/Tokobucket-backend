@@ -44,7 +44,7 @@ export const initializeDatabase = async () => {
         description TEXT,
         price DECIMAL(10,2) NOT NULL,
         original_price DECIMAL(10,2),
-        category ENUM('bucket', 'balon', 'dekor') NOT NULL,
+        category ENUM('bucket', 'balon', 'pernikahan') NOT NULL,
         image_url VARCHAR(255),
         features JSON,
         rating DECIMAL(3,2) DEFAULT 5.00,

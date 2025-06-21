@@ -31,29 +31,31 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Security middleware
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https:"],
-      scriptSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "blob:", "http:", "https:"],
-      connectSrc: ["'self'"],
-      fontSrc: ["'self'", "https:", "data:"],
-      objectSrc: ["'none'"],
-      mediaSrc: ["'self'"],
-      frameSrc: ["'none'"],
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https:"],
+        scriptSrc: ["'self'"],
+        imgSrc: ["'self'", "data:", "blob:", "http:", "https:"],
+        connectSrc: ["'self'"],
+        fontSrc: ["'self'", "https:", "data:"],
+        objectSrc: ["'none'"],
+        mediaSrc: ["'self'"],
+        frameSrc: ["'none'"],
+      },
     },
-  },
-  crossOriginEmbedderPolicy: false,
-  crossOriginResourcePolicy: { policy: "cross-origin" }
-}));
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  })
+);
 app.use(compression());
 
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  max: 1000, // limit each IP to 1000 requests per windowMs (increased for development)
   message: "Terlalu banyak permintaan, coba lagi nanti.",
 });
 app.use(limiter);
@@ -63,15 +65,23 @@ app.use(
   cors({
     origin: [
       "http://localhost:8080",
-      "http://localhost:3000", 
+      "http://localhost:3000",
       "http://192.168.190.65:8080",
       "http://127.0.0.1:8080",
-      "http://127.0.0.1:3000"
+      "http://127.0.0.1:3000",
+      "http://localhost:5173", // Vite default port
+      "http://127.0.0.1:5173",
     ],
     credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-  }),
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Requested-With",
+      "Accept",
+    ],
+    exposedHeaders: ["Content-Range", "X-Content-Range"],
+  })
 );
 
 // Body parsing middleware
@@ -79,12 +89,16 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // Serve static files (product images, etc.) with CORS headers
-app.use("/uploads", (req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Methods", "GET");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  next();
-}, express.static(path.join(__dirname, "uploads")));
+app.use(
+  "/uploads",
+  (req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Methods", "GET");
+    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    next();
+  },
+  express.static(path.join(__dirname, "uploads"))
+);
 
 // API Routes
 app.use("/api/products", productsRouter);
@@ -144,10 +158,14 @@ async function startServer() {
   try {
     console.log("🔄 Testing database connection...");
     const isConnected = await testConnection();
-    
+
     if (!isConnected) {
-      console.error("❌ Cannot connect to MySQL database. Please check your configuration.");
-      console.log("💡 Make sure MySQL is running and your .env file is configured correctly.");
+      console.error(
+        "❌ Cannot connect to MySQL database. Please check your configuration."
+      );
+      console.log(
+        "💡 Make sure MySQL is running and your .env file is configured correctly."
+      );
       process.exit(1);
     }
 
@@ -161,7 +179,6 @@ async function startServer() {
       console.log(`🎓 Bucket Wisuda & Dekorasi Backend Ready!`);
       console.log(`🗄️  Database: MySQL (balon_tegal)`);
     });
-
   } catch (error) {
     console.error("❌ Failed to start server:", error.message);
     process.exit(1);
