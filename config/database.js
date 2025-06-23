@@ -12,7 +12,7 @@ const dbConfig = {
   port: process.env.DB_PORT || 3306,
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 0
+  queueLimit: 0,
 };
 
 // Create connection pool
@@ -35,7 +35,7 @@ export const testConnection = async () => {
 export const initializeDatabase = async () => {
   try {
     const connection = await pool.getConnection();
-    
+
     // Products table
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS products (
@@ -44,7 +44,7 @@ export const initializeDatabase = async () => {
         description TEXT,
         price DECIMAL(10,2) NOT NULL,
         original_price DECIMAL(10,2),
-        category ENUM('bucket', 'balon', 'pernikahan') NOT NULL,
+        category ENUM('bucket', 'dekorasi balon', 'dekorasi pernikahan') NOT NULL,
         image_url VARCHAR(255),
         features JSON,
         rating DECIMAL(3,2) DEFAULT 5.00,
@@ -147,7 +147,7 @@ export const runQuery = async (query, params = []) => {
     return {
       id: result.insertId,
       changes: result.affectedRows,
-      result
+      result,
     };
   } catch (error) {
     throw error;
@@ -175,12 +175,17 @@ export const getAllRows = async (query, params = []) => {
 };
 
 // Helper function to get multiple rows with pagination
-export const getPaginatedRows = async (query, params = [], page = 1, limit = 10) => {
+export const getPaginatedRows = async (
+  query,
+  params = [],
+  page = 1,
+  limit = 10
+) => {
   try {
     const offset = (page - 1) * limit;
     const paginatedQuery = `${query} LIMIT ? OFFSET ?`;
     const paginatedParams = [...params, limit, offset];
-    
+
     const [rows] = await pool.execute(paginatedQuery, paginatedParams);
     return rows;
   } catch (error) {

@@ -13,19 +13,19 @@ const __dirname = path.dirname(__filename);
 // Helper function to delete image file
 const deleteImageFile = async (imageUrl) => {
   if (!imageUrl) return;
-  
+
   try {
     // Handle different image URL formats
-    if (imageUrl.startsWith('http')) {
+    if (imageUrl.startsWith("http")) {
       // Skip external URLs
       console.log("Skipping external image URL:", imageUrl);
       return;
     }
-    
+
     // Handle local file paths
     const cleanImageUrl = imageUrl.replace(/^\//, "");
     const imagePath = path.join(__dirname, "..", cleanImageUrl);
-    
+
     // Check if file exists before deleting
     if (fs.existsSync(imagePath)) {
       await fs.promises.unlink(imagePath);
@@ -51,21 +51,35 @@ const validateRequest = (req, res, next) => {
     return res.status(400).json({
       error: "Data tidak valid",
       message: "Terdapat kesalahan validasi pada data yang dikirim",
-      details: errors.array().map(err => ({
+      details: errors.array().map((err) => ({
         field: err.path,
         message: err.msg,
-        value: err.value
+        value: err.value,
       })),
     });
   }
   next();
 };
 
+// Kategori yang valid
+const PRODUCT_CATEGORIES = [
+  { value: "bucket", label: "Bucket" },
+  { value: "dekorasi balon", label: "Dekorasi Balon" },
+  { value: "dekorasi pernikahan", label: "Dekorasi Pernikahan" },
+];
+
+// Endpoint untuk daftar kategori
+router.get("/categories", (req, res) => {
+  res.json({ success: true, data: PRODUCT_CATEGORIES });
+});
+
 // GET /api/products - Get all products with optional filtering
 router.get(
   "/",
   [
-    query("category").optional().isIn(["bucket", "balon", "pernikahan"]),
+    query("category")
+      .optional()
+      .isIn(["bucket", "dekorasi balon", "dekorasi pernikahan"]),
     query("featured").optional().isBoolean(),
     query("limit").optional().isInt({ min: 1, max: 100 }),
     query("offset").optional().isInt({ min: 0 }),
@@ -114,7 +128,7 @@ router.get(
         message: error.message,
       });
     }
-  },
+  }
 );
 
 // GET /api/products/:id - Get single product
@@ -124,7 +138,7 @@ router.get("/:id", async (req, res) => {
 
     const product = await getRow(
       "SELECT * FROM products WHERE id = ? AND is_active = 1",
-      [id],
+      [id]
     );
 
     if (!product) {
@@ -157,7 +171,7 @@ router.get("/:id", async (req, res) => {
 router.get("/featured/list", async (req, res) => {
   try {
     const products = await getAllRows(
-      "SELECT * FROM products WHERE is_featured = 1 AND is_active = 1 ORDER BY created_at DESC LIMIT 6",
+      "SELECT * FROM products WHERE is_featured = 1 AND is_active = 1 ORDER BY created_at DESC LIMIT 6"
     );
 
     const formattedProducts = products.map((product) => ({
@@ -216,26 +230,29 @@ router.post(
       .isInt({ min: 1 })
       .withMessage("Harga harus berupa angka positif"),
     body("category")
-      .isIn(["bucket", "balon", "pernikahan"])
+      .isIn(["bucket", "dekorasi balon", "dekorasi pernikahan"])
       .withMessage("Kategori tidak valid"),
     body("description").optional().isString(),
     body("features").optional().isArray(),
-    body("is_featured").optional().custom((value) => {
-      console.log("Validating is_featured:", value, "Type:", typeof value);
-      if (value === undefined || value === '') {
-        console.log("is_featured is undefined or empty, returning true");
-        return true;
-      }
-      // Handle both string and boolean values from FormData
-      if (typeof value === 'string') {
-        const isValid = value === 'true' || value === 'false';
-        console.log("is_featured is string, validation result:", isValid);
+    body("is_featured")
+      .optional()
+      .custom((value) => {
+        console.log("Validating is_featured:", value, "Type:", typeof value);
+        if (value === undefined || value === "") {
+          console.log("is_featured is undefined or empty, returning true");
+          return true;
+        }
+        // Handle both string and boolean values from FormData
+        if (typeof value === "string") {
+          const isValid = value === "true" || value === "false";
+          console.log("is_featured is string, validation result:", isValid);
+          return isValid;
+        }
+        const isValid = value === true || value === false;
+        console.log("is_featured is boolean, validation result:", isValid);
         return isValid;
-      }
-      const isValid = value === true || value === false;
-      console.log("is_featured is boolean, validation result:", isValid);
-      return isValid;
-    }).withMessage("Status unggulan harus berupa boolean"),
+      })
+      .withMessage("Status unggulan harus berupa boolean"),
   ],
   validateRequest,
   async (req, res) => {
@@ -254,7 +271,7 @@ router.post(
       const image_url = req.file ? `/uploads/${req.file.filename}` : null;
 
       // Handle boolean values from FormData
-      const isFeaturedBoolean = is_featured === 'true' || is_featured === true;
+      const isFeaturedBoolean = is_featured === "true" || is_featured === true;
 
       const result = await runQuery(
         `
@@ -271,7 +288,7 @@ router.post(
           image_url,
           JSON.stringify(features),
           isFeaturedBoolean ? 1 : 0,
-        ],
+        ]
       );
 
       res.status(201).json({
@@ -286,7 +303,7 @@ router.post(
         message: error.message,
       });
     }
-  },
+  }
 );
 
 // PUT /api/products/:id - Update product (admin only)
@@ -296,35 +313,55 @@ router.put(
   requireAdmin,
   uploadSingle,
   [
-    body("name").optional().notEmpty().withMessage("Nama produk tidak boleh kosong"),
-    body("price").optional().custom((value) => {
-      if (value === undefined || value === '') return true;
-      const num = parseInt(value);
-      return !isNaN(num) && num > 0;
-    }).withMessage("Harga harus berupa angka positif"),
-    body("category").optional().isIn(["bucket", "balon", "pernikahan"]).withMessage("Kategori tidak valid. Pilih: bucket, balon, atau pernikahan"),
-    body("original_price").optional().custom((value) => {
-      if (value === undefined || value === '') return true;
-      const num = parseInt(value);
-      return !isNaN(num) && num >= 0;
-    }).withMessage("Harga asli harus berupa angka positif"),
-    body("is_featured").optional().custom((value) => {
-      console.log("Validating is_featured:", value, "Type:", typeof value);
-      if (value === undefined || value === '') {
-        console.log("is_featured is undefined or empty, returning true");
-        return true;
-      }
-      // Handle both string and boolean values from FormData
-      if (typeof value === 'string') {
-        const isValid = value === 'true' || value === 'false';
-        console.log("is_featured is string, validation result:", isValid);
+    body("name")
+      .optional()
+      .notEmpty()
+      .withMessage("Nama produk tidak boleh kosong"),
+    body("price")
+      .optional()
+      .custom((value) => {
+        if (value === undefined || value === "") return true;
+        const num = parseInt(value);
+        return !isNaN(num) && num > 0;
+      })
+      .withMessage("Harga harus berupa angka positif"),
+    body("category")
+      .optional()
+      .isIn(["bucket", "dekorasi balon", "dekorasi pernikahan"])
+      .withMessage(
+        "Kategori tidak valid. Pilih: bucket, dekorasi balon, atau dekorasi pernikahan"
+      ),
+    body("original_price")
+      .optional()
+      .custom((value) => {
+        if (value === undefined || value === "") return true;
+        const num = parseInt(value);
+        return !isNaN(num) && num >= 0;
+      })
+      .withMessage("Harga asli harus berupa angka positif"),
+    body("is_featured")
+      .optional()
+      .custom((value) => {
+        console.log("Validating is_featured:", value, "Type:", typeof value);
+        if (value === undefined || value === "") {
+          console.log("is_featured is undefined or empty, returning true");
+          return true;
+        }
+        // Handle both string and boolean values from FormData
+        if (typeof value === "string") {
+          const isValid = value === "true" || value === "false";
+          console.log("is_featured is string, validation result:", isValid);
+          return isValid;
+        }
+        const isValid = value === true || value === false;
+        console.log("is_featured is boolean, validation result:", isValid);
         return isValid;
-      }
-      const isValid = value === true || value === false;
-      console.log("is_featured is boolean, validation result:", isValid);
-      return isValid;
-    }).withMessage("Status unggulan harus berupa boolean"),
-    body("features").optional().isArray().withMessage("Fitur harus berupa array"),
+      })
+      .withMessage("Status unggulan harus berupa boolean"),
+    body("features")
+      .optional()
+      .isArray()
+      .withMessage("Fitur harus berupa array"),
   ],
   validateRequest,
   async (req, res) => {
@@ -341,7 +378,7 @@ router.put(
       // Check if product exists
       const existingProduct = await getRow(
         "SELECT id, image_url, category FROM products WHERE id = ?",
-        [id],
+        [id]
       );
       if (!existingProduct) {
         return res.status(404).json({
@@ -353,23 +390,30 @@ router.put(
       // Handle image upload
       if (req.file) {
         // Delete old image if it exists and is different from the new one
-        if (existingProduct.image_url && existingProduct.image_url !== `/uploads/${req.file.filename}`) {
+        if (
+          existingProduct.image_url &&
+          existingProduct.image_url !== `/uploads/${req.file.filename}`
+        ) {
           await deleteImageFile(existingProduct.image_url);
         }
-        
+
         updates.image_url = `/uploads/${req.file.filename}`;
       }
 
       // Handle boolean values from FormData
       if (updates.is_featured !== undefined) {
-        updates.is_featured = updates.is_featured === 'true' || updates.is_featured === true;
+        updates.is_featured =
+          updates.is_featured === "true" || updates.is_featured === true;
       }
 
       // Handle numeric values from FormData
       if (updates.price !== undefined) {
         updates.price = parseInt(updates.price);
       }
-      if (updates.original_price !== undefined && updates.original_price !== '') {
+      if (
+        updates.original_price !== undefined &&
+        updates.original_price !== ""
+      ) {
         updates.original_price = parseInt(updates.original_price);
       }
 
@@ -378,7 +422,11 @@ router.put(
       const updateValues = [];
 
       Object.keys(updates).forEach((key) => {
-        if (updates[key] !== undefined && updates[key] !== null && updates[key] !== '') {
+        if (
+          updates[key] !== undefined &&
+          updates[key] !== null &&
+          updates[key] !== ""
+        ) {
           if (key === "features") {
             updateFields.push(`${key} = ?`);
             updateValues.push(JSON.stringify(updates[key]));
@@ -402,7 +450,9 @@ router.put(
       updateFields.push("updated_at = CURRENT_TIMESTAMP");
       updateValues.push(id);
 
-      const updateQuery = `UPDATE products SET ${updateFields.join(", ")} WHERE id = ?`;
+      const updateQuery = `UPDATE products SET ${updateFields.join(
+        ", "
+      )} WHERE id = ?`;
       console.log("Update query:", updateQuery);
       console.log("Update values:", updateValues);
 
@@ -411,10 +461,10 @@ router.put(
       res.json({
         success: true,
         message: "Produk berhasil diupdate",
-        data: { 
+        data: {
           id: parseInt(id),
           updated_fields: Object.keys(updates),
-          image_url: updates.image_url 
+          image_url: updates.image_url,
         },
       });
     } catch (error) {
@@ -425,7 +475,7 @@ router.put(
         details: error.sqlMessage || error.message,
       });
     }
-  },
+  }
 );
 
 // DELETE /api/products/:id - Delete product (admin only)
@@ -436,7 +486,7 @@ router.delete("/:id", verifyToken, requireAdmin, async (req, res) => {
     // Check if product exists
     const existingProduct = await getRow(
       "SELECT id, image_url FROM products WHERE id = ?",
-      [id],
+      [id]
     );
     if (!existingProduct) {
       return res.status(404).json({
@@ -447,7 +497,7 @@ router.delete("/:id", verifyToken, requireAdmin, async (req, res) => {
     // Check if there are any orders referencing this product
     const relatedOrders = await getAllRows(
       "SELECT id FROM orders WHERE product_id = ?",
-      [id],
+      [id]
     );
 
     if (relatedOrders.length > 0) {
@@ -462,10 +512,7 @@ router.delete("/:id", verifyToken, requireAdmin, async (req, res) => {
     await deleteImageFile(existingProduct.image_url);
 
     // Hard delete - remove from database
-    await runQuery(
-      "DELETE FROM products WHERE id = ?",
-      [id],
-    );
+    await runQuery("DELETE FROM products WHERE id = ?", [id]);
 
     res.json({
       success: true,
@@ -534,100 +581,118 @@ router.get("/admin/all", verifyToken, requireAdmin, async (req, res) => {
 });
 
 // PUT /api/products/:id/toggle-featured - Toggle featured status (admin only)
-router.put("/:id/toggle-featured", verifyToken, requireAdmin, async (req, res) => {
-  try {
-    const { id } = req.params;
+router.put(
+  "/:id/toggle-featured",
+  verifyToken,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
 
-    // Check if product exists
-    const existingProduct = await getRow(
-      "SELECT id, is_featured FROM products WHERE id = ?",
-      [id],
-    );
-    if (!existingProduct) {
-      return res.status(404).json({
-        error: "Produk tidak ditemukan",
+      // Check if product exists
+      const existingProduct = await getRow(
+        "SELECT id, is_featured FROM products WHERE id = ?",
+        [id]
+      );
+      if (!existingProduct) {
+        return res.status(404).json({
+          error: "Produk tidak ditemukan",
+        });
+      }
+
+      // Toggle featured status
+      const newFeaturedStatus = existingProduct.is_featured ? 0 : 1;
+      await runQuery(
+        "UPDATE products SET is_featured = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        [newFeaturedStatus, id]
+      );
+
+      res.json({
+        success: true,
+        message: `Produk berhasil ${
+          newFeaturedStatus ? "ditampilkan" : "disembunyikan"
+        } dari unggulan`,
+        data: { is_featured: newFeaturedStatus },
+      });
+    } catch (error) {
+      console.error("Error toggling featured status:", error);
+      res.status(500).json({
+        error: "Gagal mengubah status unggulan",
+        message: error.message,
       });
     }
-
-    // Toggle featured status
-    const newFeaturedStatus = existingProduct.is_featured ? 0 : 1;
-    await runQuery(
-      "UPDATE products SET is_featured = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-      [newFeaturedStatus, id],
-    );
-
-    res.json({
-      success: true,
-      message: `Produk berhasil ${newFeaturedStatus ? "ditampilkan" : "disembunyikan"} dari unggulan`,
-      data: { is_featured: newFeaturedStatus },
-    });
-  } catch (error) {
-    console.error("Error toggling featured status:", error);
-    res.status(500).json({
-      error: "Gagal mengubah status unggulan",
-      message: error.message,
-    });
   }
-});
+);
 
 // PUT /api/products/:id/toggle-active - Toggle active status (admin only)
-router.put("/:id/toggle-active", verifyToken, requireAdmin, async (req, res) => {
-  try {
-    const { id } = req.params;
+router.put(
+  "/:id/toggle-active",
+  verifyToken,
+  requireAdmin,
+  async (req, res) => {
+    try {
+      const { id } = req.params;
 
-    // Check if product exists
-    const existingProduct = await getRow(
-      "SELECT id, is_active FROM products WHERE id = ?",
-      [id],
-    );
-    if (!existingProduct) {
-      return res.status(404).json({
-        error: "Produk tidak ditemukan",
+      // Check if product exists
+      const existingProduct = await getRow(
+        "SELECT id, is_active FROM products WHERE id = ?",
+        [id]
+      );
+      if (!existingProduct) {
+        return res.status(404).json({
+          error: "Produk tidak ditemukan",
+        });
+      }
+
+      // Toggle active status
+      const newActiveStatus = existingProduct.is_active ? 0 : 1;
+      await runQuery(
+        "UPDATE products SET is_active = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+        [newActiveStatus, id]
+      );
+
+      res.json({
+        success: true,
+        message: `Produk berhasil ${
+          newActiveStatus ? "diaktifkan" : "dinonaktifkan"
+        }`,
+        data: { is_active: newActiveStatus },
+      });
+    } catch (error) {
+      console.error("Error toggling active status:", error);
+      res.status(500).json({
+        error: "Gagal mengubah status aktif",
+        message: error.message,
       });
     }
-
-    // Toggle active status
-    const newActiveStatus = existingProduct.is_active ? 0 : 1;
-    await runQuery(
-      "UPDATE products SET is_active = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-      [newActiveStatus, id],
-    );
-
-    res.json({
-      success: true,
-      message: `Produk berhasil ${newActiveStatus ? "diaktifkan" : "dinonaktifkan"}`,
-      data: { is_active: newActiveStatus },
-    });
-  } catch (error) {
-    console.error("Error toggling active status:", error);
-    res.status(500).json({
-      error: "Gagal mengubah status aktif",
-      message: error.message,
-    });
   }
-});
+);
 
 // POST /api/products/cleanup-images - Clean up orphaned images (admin only)
 router.post("/cleanup-images", verifyToken, requireAdmin, async (req, res) => {
   try {
     const uploadsDir = path.join(__dirname, "..", "uploads");
-    
+
     // Get all image files in uploads directory
     const files = await fs.promises.readdir(uploadsDir);
-    const imageFiles = files.filter(file => 
+    const imageFiles = files.filter((file) =>
       /\.(jpg|jpeg|png|gif|webp)$/i.test(file)
     );
-    
+
     // Get all image URLs from database
-    const products = await getAllRows("SELECT image_url FROM products WHERE image_url IS NOT NULL");
-    const dbImageUrls = products.map(p => p.image_url.replace(/^\//, ""));
-    
+    const products = await getAllRows(
+      "SELECT image_url FROM products WHERE image_url IS NOT NULL"
+    );
+    const dbImageUrls = products.map((p) => p.image_url.replace(/^\//, ""));
+
     // Find orphaned images (files that exist but not in database)
-    const orphanedImages = imageFiles.filter(file => !dbImageUrls.includes(file));
-    
+    const orphanedImages = imageFiles.filter(
+      (file) => !dbImageUrls.includes(file)
+    );
+
     let deletedCount = 0;
     let errorCount = 0;
-    
+
     // Delete orphaned images
     for (const imageFile of orphanedImages) {
       try {
@@ -636,11 +701,15 @@ router.post("/cleanup-images", verifyToken, requireAdmin, async (req, res) => {
         console.log("✅ Orphaned image deleted:", imageFile);
         deletedCount++;
       } catch (error) {
-        console.error("❌ Error deleting orphaned image:", imageFile, error.message);
+        console.error(
+          "❌ Error deleting orphaned image:",
+          imageFile,
+          error.message
+        );
         errorCount++;
       }
     }
-    
+
     res.json({
       success: true,
       message: `Cleanup completed. ${deletedCount} orphaned images deleted, ${errorCount} errors.`,
@@ -649,8 +718,8 @@ router.post("/cleanup-images", verifyToken, requireAdmin, async (req, res) => {
         orphaned_files: orphanedImages.length,
         deleted_count: deletedCount,
         error_count: errorCount,
-        orphaned_files_list: orphanedImages
-      }
+        orphaned_files_list: orphanedImages,
+      },
     });
   } catch (error) {
     console.error("Error cleaning up images:", error);

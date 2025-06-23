@@ -33,7 +33,7 @@ const sampleProducts = [
       "Paket lengkap dekorasi balon untuk acara spesial dengan berbagai pilihan warna",
     price: 299000,
     original_price: 350000,
-    category: "balon",
+    category: "dekorasi balon",
     image_url: "/uploads/balloon-decoration.jpg",
     features: ["Setup Gratis", "Pilihan Warna", "Tahan 8 Jam"],
     is_featured: true,
@@ -71,7 +71,7 @@ const sampleProducts = [
       "Paket dekorasi pernikahan dengan konsep minimalis dan elegant",
     price: 1500000,
     original_price: 1800000,
-    category: "pernikahan",
+    category: "dekorasi pernikahan",
     image_url: "/uploads/wedding-minimal.jpg",
     features: ["Setup Lengkap", "Konsep Minimalis", "Tim Decorator"],
     is_featured: false,
@@ -158,11 +158,13 @@ const sampleAdmin = {
 async function initData() {
   try {
     console.log("🔄 Testing database connection...");
-    
+
     // Test database connection first
     const isConnected = await testConnection();
     if (!isConnected) {
-      console.error("❌ Cannot connect to MySQL database. Please check your configuration.");
+      console.error(
+        "❌ Cannot connect to MySQL database. Please check your configuration."
+      );
       process.exit(1);
     }
 
@@ -175,7 +177,7 @@ async function initData() {
     // Drop existing tables first
     console.log("🧹 Cleaning existing tables...");
     const connection = await pool.getConnection();
-    
+
     try {
       await connection.execute("SET FOREIGN_KEY_CHECKS = 0");
       await connection.execute("DROP TABLE IF EXISTS orders");
@@ -216,7 +218,7 @@ async function initData() {
           product.is_featured,
           product.rating,
           product.reviews_count,
-        ],
+        ]
       );
     }
 
@@ -238,7 +240,7 @@ async function initData() {
           testimonial.testimonial_text,
           testimonial.is_approved,
           testimonial.is_featured,
-        ],
+        ]
       );
     }
 
@@ -256,7 +258,7 @@ async function initData() {
         sampleAdmin.email,
         sampleAdmin.password_hash,
         sampleAdmin.role,
-      ],
+      ]
     );
 
     console.log("✅ Database initialization completed successfully!");
@@ -268,11 +270,27 @@ async function initData() {
     console.log(`   Email: ${sampleAdmin.email}`);
     console.log(`   Password: password`);
     console.log("\n🚀 You can now start the server with: npm run dev");
-
   } catch (error) {
     console.error("❌ Error initializing database:", error.message);
     process.exit(1);
   }
+}
+
+// Fungsi untuk menghapus semua produk
+export async function deleteAllProducts() {
+  try {
+    const connection = await pool.getConnection();
+    await connection.execute("DELETE FROM products");
+    connection.release();
+    console.log("✅ Semua produk berhasil dihapus!");
+  } catch (error) {
+    console.error("❌ Gagal menghapus produk:", error.message);
+  }
+}
+
+// Jika dijalankan langsung: node scripts/initDatabase.js delete-products
+if (process.argv[2] === "delete-products") {
+  deleteAllProducts().then(() => process.exit(0));
 }
 
 // Run the initialization
